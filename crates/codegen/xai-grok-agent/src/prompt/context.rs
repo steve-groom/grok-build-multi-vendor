@@ -144,12 +144,15 @@ pub struct PromptContext {
     /// stdio / generic-ACP).
     #[serde(default)]
     pub is_non_interactive: bool,
-    /// Identity in the primary grok-build system prompt (`You are <label>…`).
+    /// Inference-model name plugged into the primary system prompt:
+    /// `You are Grok Build running the <label> model…`.
     /// Not the UI picker name. Defaults to [`DEFAULT_SYSTEM_PROMPT_LABEL`].
     #[serde(default = "default_system_prompt_label")]
     pub system_prompt_label: String,
 }
-/// Default identity on trim-tool-descriptions (`You are Grok released by xAI`).
+/// Default inference-model placeholder when no model name is known
+/// (`You are Grok Build running the Grok model…`). Prefer the real catalog
+/// name / routing slug when available.
 pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = "Grok";
 fn default_system_prompt_label() -> String {
     DEFAULT_SYSTEM_PROMPT_LABEL.to_string()

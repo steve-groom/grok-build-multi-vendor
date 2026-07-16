@@ -80,6 +80,7 @@ base_url = "https://api.example.com/v1"   # OpenAI-compatible endpoint
 name = "Display Name"                     # Shown in the model picker
 description = "Model description"          # Optional description
 api_key = "sk-..."                        # API key for this provider (optional)
+api_key_file = "~/secrets/provider.key"   # Path to a file containing the API key (optional)
 env_key = "XAI_API_KEY"                   # Env var holding the API key (optional; string or array)
 api_backend = "chat_completions"          # "chat_completions", "responses", or "messages"
 temperature = 0.7                         # Sampling temperature
@@ -94,9 +95,12 @@ extra_headers = { "x-api-key" = "sk-..." } # Extra request headers, sent verbati
 Grok resolves the API key in this order:
 
 1. The `api_key` field in the model config
-2. The environment variable(s) named by `env_key` — a single string or an array of names. The first set, non-empty value wins (for example `env_key = ["ANTHROPIC_AUTH_TOKEN", "LC_ANTHROPIC_AUTH_TOKEN"]` for SSH `LC_*` forwarding)
-3. Your signed-in session token (from `grok login`), for a model with no `api_key`/`env_key` of its own
-4. The `XAI_API_KEY` environment variable (global fallback; Grok also accepts `GROK_CODE_XAI_API_KEY` for backward compatibility)
+2. The contents of `api_key_file` (path may use `~/`; whitespace is trimmed)
+3. The environment variable(s) named by `env_key` — a single string or an array of names. The first set, non-empty value wins (for example `env_key = ["ANTHROPIC_AUTH_TOKEN", "LC_ANTHROPIC_AUTH_TOKEN"]` for SSH `LC_*` forwarding)
+4. Your signed-in session token (from `grok login`), for a model with no `api_key` / `api_key_file` / `env_key` of its own
+5. The `XAI_API_KEY` environment variable (global fallback; Grok also accepts `GROK_CODE_XAI_API_KEY` for backward compatibility)
+
+Built-in SpaceXAI models use your Grok account session by default when you are signed in. Vendor models with their own credentials use those keys without logging out of your Grok account — pick them with `/model` or `-m`.
 
 ### Context Window
 
@@ -217,11 +221,34 @@ Make sure Ollama is running (`ollama serve`) and the model is pulled (`ollama pu
 ### Together AI
 
 ```toml
-[model.together-mixtral]
-model = "mistralai/Mixtral-8x7B-Instruct-v0.1"
-base_url = "https://api.together.xyz/v1"
-name = "Mixtral 8x7B"
-env_key = "TOGETHER_API_KEY"
+# Keep Grok account models as the session default…
+[models]
+default = "grok-build"
+
+# Together.ai options — switch with /model <id>  or  -m <id>
+[model.together-glm]
+model = "zai-org/GLM-5.2"
+base_url = "https://api.together.ai/v1"
+name = "Together GLM 5.2"
+api_key_file = "~/grok_development/together_api_key.txt"
+api_backend = "chat_completions"
+context_window = 262144
+
+[model.together-minimax]
+model = "MiniMaxAI/MiniMax-M3"
+base_url = "https://api.together.ai/v1"
+name = "Together MiniMax M3"
+api_key_file = "~/grok_development/together_api_key.txt"
+api_backend = "chat_completions"
+context_window = 524288
+
+[model.together-kimi]
+model = "moonshotai/Kimi-K2.7-Code"
+base_url = "https://api.together.ai/v1"
+name = "Together Kimi K2.7 Code"
+api_key_file = "~/grok_development/together_api_key.txt"
+api_backend = "chat_completions"
+context_window = 262144
 ```
 
 ### Local OpenAI-Compatible Server

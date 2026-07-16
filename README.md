@@ -1,128 +1,147 @@
-<div align="center">
+# Grok Build — multi-vendor fork
 
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://media.x.ai/v1/website/spacexai-symbol-white-transparent-0c31957f.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://media.x.ai/v1/website/spacexai-symbol-black-transparent-6435cf42.png">
-    <img alt="SpaceXAI logo" src="https://media.x.ai/v1/website/spacexai-symbol-black-transparent-6435cf42.png" width="96">
-  </picture>
-  <br>
-  Grok Build (<code>grok</code>)
-</h1>
+**Grok Build** is [xAI / SpaceXAI’s](https://github.com/xai-org/grok-build) terminal coding agent, forked here with small patches so you can:
 
-**Grok Build** is SpaceXAI's terminal-based AI coding agent. It runs as a
-full-screen TUI that understands your codebase, edits files, executes shell
-commands, searches the web, and manages long-running tasks — interactively,
-headlessly for scripting/CI, or embedded in editors via the Agent Client
-Protocol (ACP).
+1. **Use your Grok account** (browser / `grok login`) for xAI-hosted models — the stock default experience.
+2. **Bring your own vendor** via OpenAI-compatible APIs (e.g. **Together.ai**), with per-model API keys.
+3. Load keys from a **file** (`api_key_file`) as well as env vars / inline config.
+4. Self-identify correctly: *“You are Grok Build running the **&lt;model&gt;** model…”*
 
-[Installing the released binary](#installing-the-released-binary) ·
-[Building from source](#building-from-source) ·
-[Documentation](#documentation) ·
-[Repository layout](#repository-layout) ·
-[Development](#development) ·
-[Contributing](#contributing) ·
-[License](#license)
-
-![Grok Build TUI](https://media.x.ai/v1/website/universe-tui-screenshot-6f7a0837.png)
-
-**Learn more about Grok Build at [x.ai/cli](https://x.ai/cli)**
-
-This repository contains the Rust source for the `grok` CLI/TUI and its agent
-runtime. It is synced periodically from the SpaceXAI monorepo.
-
-</div>
+Upstream source: [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0).  
+This fork does **not** replace the official binary’s auto-update channel; install as `grok-local` by default so stock `grok` stays untouched.
 
 ---
 
-## Installing the released binary
+## Quick install (from source zip or git clone)
 
-Prebuilt binaries are published for macOS, Linux, and Windows:
-
-```sh
-curl -fsSL https://x.ai/cli/install.sh | bash   # macOS / Linux / Git Bash
-irm https://x.ai/cli/install.ps1 | iex          # Windows PowerShell
-grok --version
+```bash
+# After unzip or: git clone <this-repo>.git && cd <this-repo>
+chmod +x install.sh
+./install.sh
+# optional: append Together model blocks to ~/.grok/config.toml
+./install.sh --with-together-config
 ```
 
-See the [changelog](https://x.ai/build/changelog) for the latest fixes,
-features, and improvements in each release.
+Installs to `~/.local/bin/grok-local` (override with `--prefix` / `--name`).
 
-## Building from source
+### Requirements
 
-Requirements:
+| Tool | Notes |
+|------|--------|
+| **Rust** | [rustup](https://rustup.rs) — toolchain pin is in `rust-toolchain.toml` |
+| **protoc** | Auto-fetched by `install.sh` if missing |
+| **curl / unzip** | For protoc bootstrap |
+| Disk / RAM | Full release build is heavy (~10–20+ min first time) |
 
-- **Rust** — the toolchain is pinned by [`rust-toolchain.toml`](rust-toolchain.toml);
-  `rustup` installs it automatically on first build.
-- **protoc** — proto codegen resolves [`bin/protoc`](bin/protoc) (a
-  [dotslash](https://dotslash-cli.com) launcher) or falls back to a `protoc` on
-  `PATH` / `$PROTOC`.
-- macOS and Linux are supported build hosts; Windows builds are best-effort
-  and not currently tested from this tree.
+### One-liner (after you publish a release asset)
 
-```sh
-cargo run -p xai-grok-pager-bin              # build + launch the TUI
-cargo build -p xai-grok-pager-bin --release  # release binary: target/release/xai-grok-pager
-cargo check -p xai-grok-pager-bin            # fast validation
+```bash
+# Example once a GitHub release zip exists:
+curl -fsSL https://github.com/<you>/grok-build-multi-vendor/releases/latest/download/source.zip -o /tmp/gb.zip
+unzip -q /tmp/gb.zip -d /tmp/gb && cd /tmp/gb/*
+./install.sh --with-together-config
 ```
 
-The binary artifact is named `xai-grok-pager`; official installs ship it as
-`grok`. On first launch it opens your browser to authenticate — see the
-[authentication guide](crates/codegen/xai-grok-pager/docs/user-guide/02-authentication.md).
+---
 
-## Documentation
+## What changed vs upstream
 
-Full online documentation is available at
-[docs.x.ai/build/overview](https://docs.x.ai/build/overview).
+| Feature | Detail |
+|---------|--------|
+| `api_key_file` | `[model.*] api_key_file = "~/secret.txt"` loads a trimmed key at config apply time |
+| Identity prompt | *Grok Build running the &lt;model&gt; model* (not silent “I am Grok 4.5” when on a vendor) |
+| Docs | Together / MiniMax / Kimi examples in the custom-models guide |
+| Installer | `install.sh` + `config.example.toml` |
 
-The user guide ships with the pager crate:
-[`crates/codegen/xai-grok-pager/docs/user-guide/`](crates/codegen/xai-grok-pager/docs/user-guide/)
-— getting started, keyboard shortcuts, slash commands, configuration, theming,
-MCP servers, skills, plugins, hooks, headless mode, sandboxing, and more.
+Credential order for each model:
 
-## Repository layout
+1. `api_key`
+2. `api_key_file`
+3. `env_key` (string or array)
+4. Grok session token (`grok login`)
+5. `XAI_API_KEY`
 
-| Path | Contents |
-|------|----------|
-| `crates/codegen/xai-grok-pager-bin` | Composition-root package; builds the `xai-grok-pager` binary |
-| `crates/codegen/xai-grok-pager` | The TUI: scrollback, prompt, modals, rendering |
-| `crates/codegen/xai-grok-shell` | Agent runtime + leader/stdio/headless entry points |
-| `crates/codegen/xai-grok-tools` | Tool implementations (terminal, file edit, search, ...) |
-| `crates/codegen/xai-grok-workspace` | Host filesystem, VCS, execution, checkpoints |
-| `crates/codegen/...` | The rest of the CLI crate closure (config, MCP, markdown, sandbox, ...) |
-| `crates/common/`, `crates/build/`, `prod/mc/` | Small shared leaf crates pulled in by the closure |
-| `third_party/` | Vendored upstream source (Mermaid diagram stack) — see below |
+---
 
-> [!IMPORTANT]
-> The root `Cargo.toml` (workspace members, dependency versions, lints,
-> profiles) is **generated** — treat it as read-only. Prefer editing per-crate
-> `Cargo.toml` files.
+## Configure Together.ai (optional)
 
-## Development
+1. Get an API key from [Together](https://api.together.ai/).
+2. Save it (never commit this file):
 
-```sh
-cargo check -p <crate>        # always target specific crates; full-workspace builds are slow
-cargo test -p xai-grok-config # per-crate tests
-cargo clippy -p <crate>       # lint config: clippy.toml at the repo root
-cargo fmt --all               # rustfmt.toml at the repo root
+```bash
+echo 'YOUR_TOGETHER_KEY' > ~/together_api_key.txt
+chmod 600 ~/together_api_key.txt
 ```
 
-## Contributing
+3. Merge example models:
 
-> [!NOTE]
-> External contributions are not accepted. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+```bash
+./install.sh --with-together-config
+# or manually: copy blocks from config.example.toml into ~/.grok/config.toml
+```
+
+4. Run:
+
+```bash
+grok-local models
+grok-local -m together-glm -p "Say hello"
+grok-local -m together-minimax   # MiniMax-M3, 524K context
+grok-local -m together-kimi      # Kimi-K2.7-Code
+```
+
+| Config id | Together model | Context (Together serverless) |
+|-----------|----------------|--------------------------------|
+| `together-glm` | `zai-org/GLM-5.2` | 256K |
+| `together-minimax` | `MiniMaxAI/MiniMax-M3` | **524K** |
+| `together-kimi` | `moonshotai/Kimi-K2.7-Code` | 256K |
+
+Grok account models still work when selected (and when a model has no vendor key of its own).
+
+---
+
+## Manual build
+
+```bash
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+export PROTOC="$(command -v protoc)"
+cargo build -p xai-grok-pager-bin --release
+# binary: target/release/xai-grok-pager
+cp target/release/xai-grok-pager ~/.local/bin/grok-local
+```
+
+If you edit `crates/codegen/xai-grok-agent/templates/*.md`, regenerate encrypted templates:
+
+```bash
+cd crates/codegen/xai-grok-agent && python3 scripts/encrypt_templates.py
+```
+
+---
+
+## Verify which model is live
+
+Asking the agent “what model are you?” follows the system prompt. Prefer:
+
+```bash
+grok-local models          # * = default
+# or logs:
+RUST_LOG=info GROK_LOG_FILE=/tmp/grok.log grok-local -m together-glm -p "ping"
+# look for: base_url=https://api.together.ai/v1  model=zai-org/GLM-5.2
+```
+
+---
+
+## Security
+
+- Do **not** commit API keys or `together_api_key.txt`.
+- Prefer `api_key_file` or environment variables over inline `api_key` in tracked files.
+- Official `grok` auto-update is separate; this install uses the name `grok-local` by default.
+
+---
 
 ## License
 
-First-party code in this repository is licensed under the **Apache License,
-Version 2.0** — see [`LICENSE`](LICENSE).
+First-party code remains under the **Apache License 2.0** (see `LICENSE` and upstream notices).  
+This fork’s packaging (`install.sh`, `config.example.toml`, docs additions) is also Apache-2.0.
 
-Third-party and vendored code remains under its original licenses. See:
-
-- [`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES) — crates.io / git dependencies,
-  bundled UI themes, and **in-tree source ports** (including openai/codex and
-  sst/opencode tool implementations)
-- [`crates/codegen/xai-grok-tools/THIRD_PARTY_NOTICES.md`](crates/codegen/xai-grok-tools/THIRD_PARTY_NOTICES.md)
-  — crate-local notice for the codex and opencode ports (license texts +
-  Apache §4(b) change notice)
-- [`third_party/NOTICE`](third_party/NOTICE) — vendored Mermaid-stack index
+Upstream: https://github.com/xai-org/grok-build  
+Grok Build product: https://x.ai/cli

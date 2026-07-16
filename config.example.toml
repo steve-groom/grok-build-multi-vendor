@@ -1,0 +1,50 @@
+# Example multi-vendor config for Grok Build (this fork).
+# Copy pieces into ~/.grok/config.toml (do not commit real API keys).
+
+[models]
+# Default: Together GLM-5.2 — change to "grok-4.5" (or similar) for Grok account.
+default = "together-glm"
+
+# ── Together.ai vendors (OpenAI-compatible /v1) ────────────────────────────
+# Auth options (first match wins for the model):
+#   api_key = "..."
+#   api_key_file = "/path/to/key.txt"   # this fork: loads trimmed key from file
+#   env_key = "TOGETHER_API_KEY"
+
+[model.together-glm]
+model = "zai-org/GLM-5.2"
+base_url = "https://api.together.ai/v1"
+name = "Together GLM 5.2"
+description = "zai-org/GLM-5.2 via Together.ai (256K)"
+api_key_file = "~/together_api_key.txt"
+# env_key = "TOGETHER_API_KEY"
+api_backend = "chat_completions"
+system_prompt_label = "zai-org/GLM-5.2 (Together.ai)"
+context_window = 262144
+
+[model.together-minimax]
+model = "MiniMaxAI/MiniMax-M3"
+base_url = "https://api.together.ai/v1"
+name = "Together MiniMax M3"
+description = "MiniMaxAI/MiniMax-M3 via Together.ai (524K)"
+api_key_file = "~/together_api_key.txt"
+api_backend = "chat_completions"
+system_prompt_label = "MiniMaxAI/MiniMax-M3 (Together.ai)"
+context_window = 524288
+
+[model.together-kimi]
+model = "moonshotai/Kimi-K2.7-Code"
+base_url = "https://api.together.ai/v1"
+name = "Together Kimi K2.7 Code"
+description = "moonshotai/Kimi-K2.7-Code via Together.ai (256K)"
+api_key_file = "~/together_api_key.txt"
+api_backend = "chat_completions"
+system_prompt_label = "moonshotai/Kimi-K2.7-Code (Together.ai)"
+context_window = 262144
+
+# ── Grok account (default xAI session via `grok login`) ────────────────────
+# Leave models without api_key / api_key_file / env_key to use your signed-in
+# Grok account. Built-in catalog models (e.g. grok-4.5) work this way.
+#
+# [models]
+# default = "grok-4.5"

@@ -2,9 +2,12 @@ pub const ENV_SYSTEM_PROMPT_LABEL: &str = "GROK_SYSTEM_PROMPT_LABEL";
 
 pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = xai_grok_agent::DEFAULT_SYSTEM_PROMPT_LABEL;
 
-/// Resolve system-prompt identity label.
+/// Resolve the inference-model name used in the system prompt
+/// (`You are Grok Build running the <label> model…`).
+///
 /// Precedence: env → config per-model → `[agent]` → GB per-model → GB global →
-/// `"Grok"`. Empty/whitespace falls through.
+/// model display name → routing slug → catalog id → `"Grok"`.
+/// Empty/whitespace falls through.
 ///
 /// Per-model TOML is looked up by session catalog id, then routing slug
 /// (`ModelInfo.model`). Do not use CLI `-m` alone — it may outlive a mid-session
@@ -22,14 +25,38 @@ pub fn resolve_system_prompt_label(
     let user_per_model =
         label_for(model_id).or_else(|| model.map(|m| m.model.as_str()).and_then(label_for));
 
-    resolve_system_prompt_label_from_tiers(
+    let from_tiers = resolve_system_prompt_label_from_tiers(
         user_per_model,
         cfg.agent.system_prompt_label.clone(),
         model.and_then(|m| m.system_prompt_label.clone()),
         cfg.remote_settings
             .as_ref()
             .and_then(|r| r.system_prompt_label.clone()),
-    )
+    );
+
+    // When nothing configured an explicit label, prefer the real model identity
+    // so the agent correctly reports "Grok Build running <this model>".
+    if from_tiers == DEFAULT_SYSTEM_PROMPT_LABEL {
+        if let Some(m) = model {
+            if let Some(name) = m
+                .name
+                .as_ref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            {
+                return name.to_string();
+            }
+            let slug = m.model.trim();
+            if !slug.is_empty() {
+                return slug.to_string();
+            }
+        }
+        let id = model_id.trim();
+        if !id.is_empty() {
+            return id.to_string();
+        }
+    }
+    from_tiers
 }
 
 pub fn resolve_system_prompt_label_from_tiers(

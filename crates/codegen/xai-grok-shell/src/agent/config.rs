@@ -3551,6 +3551,10 @@ pub struct ConfigModelOverride {
     pub name: Option<String>,
     pub description: Option<String>,
     pub api_key: Option<String>,
+    /// Path to a file containing the provider API key (trimmed). Supports `~/`
+    /// expansion. Used when `api_key` is unset; takes priority over `env_key`.
+    /// Example: `api_key_file = "~/secrets/together_api_key.txt"`
+    pub api_key_file: Option<String>,
     /// Env var name(s) for the provider key — string or array in config.toml.
     pub env_key: Option<EnvKeys>,
     pub api_base_url: Option<String>,
@@ -3675,6 +3679,20 @@ impl ConfigModelOverride {
         }
         if self.api_key.is_some() {
             entry.api_key.clone_from(&self.api_key);
+        } else if let Some(ref path) = self.api_key_file {
+            // Load once at config-apply time so ModelEntry stays a plain key
+            // string (same shape as inline `api_key`). Config reloads re-read.
+            match read_api_key_file(path) {
+                Ok(key) => entry.api_key = Some(key),
+                Err(e) => {
+                    tracing::warn!(
+                        model_key = %key,
+                        path = %path,
+                        error = %e,
+                        "api_key_file: failed to read provider key file"
+                    );
+                }
+            }
         }
         if self.env_key.is_some() {
             entry.env_key.clone_from(&self.env_key);
@@ -3682,11 +3700,55 @@ impl ConfigModelOverride {
         if self.api_base_url.is_some() {
             entry.api_base_url.clone_from(&self.api_base_url);
         }
-        if self.supported_in_api.is_none() && (self.api_key.is_some() || self.env_key.is_some()) {
+        if self.supported_in_api.is_none()
+            && (self.api_key.is_some() || self.api_key_file.is_some() || self.env_key.is_some())
+        {
             entry.info.supported_in_api = true;
         }
         entry
     }
+}
+
+/// Expand `~/…` using `$HOME` (or the platform home when unset), otherwise keep
+/// the path as given. Relative paths stay relative to the process cwd.
+fn expand_api_key_file_path(path: &str) -> PathBuf {
+    let path = path.trim();
+    if path == "~" {
+        return home_dir_for_api_key_file().unwrap_or_else(|| PathBuf::from("~"));
+    }
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = home_dir_for_api_key_file() {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
+
+fn home_dir_for_api_key_file() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|h| !h.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            // Fallback for environments that only set USERPROFILE (rare on Linux
+            // builds, but keeps the helper portable for tests).
+            std::env::var_os("USERPROFILE")
+                .filter(|h| !h.is_empty())
+                .map(PathBuf::from)
+        })
+}
+
+/// Read and trim a provider key from disk. Empty files are errors so callers
+/// can fall through to session / global credentials cleanly.
+pub(crate) fn read_api_key_file(path: &str) -> Result<String, String> {
+    let expanded = expand_api_key_file_path(path);
+    let contents = std::fs::read_to_string(&expanded).map_err(|e| {
+        format!("cannot read {}: {e}", expanded.display())
+    })?;
+    let key = contents.trim();
+    if key.is_empty() {
+        return Err(format!("{} is empty", expanded.display()));
+    }
+    Ok(key.to_owned())
 }
 /// Shared model metadata — the common fields across all model sources.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -5574,6 +5636,39 @@ reasoning_effort = "low"
             first_own_credential(Some("real-key"), Some(&env_key)).as_deref(),
             Some("real-key")
         );
+    }
+    #[test]
+    fn read_api_key_file_trims_whitespace() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("key.txt");
+        std::fs::write(&path, "  sk-from-file\n").expect("write key");
+        let key = read_api_key_file(path.to_str().unwrap()).expect("read key");
+        assert_eq!(key, "sk-from-file");
+    }
+    #[test]
+    fn config_model_override_api_key_file_loads_into_entry() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("together.key");
+        std::fs::write(&path, "tgp_test_key_from_file\n").expect("write key");
+        let ov = ConfigModelOverride {
+            model: Some("vendor-model".into()),
+            base_url: Some("https://api.together.xyz/v1".into()),
+            api_key_file: Some(path.to_str().unwrap().to_owned()),
+            ..Default::default()
+        };
+        let endpoints = EndpointsConfig::default();
+        let entry = ov.apply("together-test", None, &endpoints);
+        assert_eq!(entry.api_key.as_deref(), Some("tgp_test_key_from_file"));
+        assert!(entry.has_own_credentials());
+        assert_eq!(entry.info.base_url, "https://api.together.xyz/v1");
+        // Inline api_key wins over api_key_file.
+        let ov_inline = ConfigModelOverride {
+            api_key: Some("inline-wins".into()),
+            api_key_file: Some(path.to_str().unwrap().to_owned()),
+            ..Default::default()
+        };
+        let entry2 = ov_inline.apply("together-test", Some(entry), &endpoints);
+        assert_eq!(entry2.api_key.as_deref(), Some("inline-wins"));
     }
     #[test]
     #[serial]

@@ -281,7 +281,7 @@ pub async fn enforce_minimum_version_or_exit(update_config: &UpdateConfig) {
             // child process ever writes to a broken pipe. For now this
             // path is rare (only fires when the server pushes a minimum
             // version bump), so print a relaunch message instead.
-            eprintln!("Update installed. Run `grok` to start.");
+            eprintln!("Update installed. Run `grok-local` to start.");
             std::process::exit(0);
         }
         Err(e) => {

@@ -31,10 +31,10 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-# Ensure we don't push keys
-if git ls-files | grep -qiE 'api_key|together_api_key|\.env$'; then
+# Ensure we don't push secrets (real key files / env dumps — not source named *api_key*)
+if git ls-files | grep -qiE 'together_api_key\.txt$|(^|/)\.env(\.|$)|secrets?/|credentials\.json$'; then
   echo "Refusing to publish: secret-like paths are tracked" >&2
-  git ls-files | grep -iE 'api_key|together_api_key|\.env$' >&2
+  git ls-files | grep -iE 'together_api_key\.txt$|(^|/)\.env(\.|$)|secrets?/|credentials\.json$' >&2
   exit 1
 fi
 

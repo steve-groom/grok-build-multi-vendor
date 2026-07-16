@@ -1,0 +1,12 @@
+# DeepSeek — https://platform.deepseek.com/
+# Key: ~/deepseek_api_key.txt  or  @deepseek
+
+[model.deepseek-chat]
+model = "deepseek-chat"
+base_url = "https://api.deepseek.com/v1"
+name = "DeepSeek Chat"
+api_key_file = "@deepseek"
+env_key = "DEEPSEEK_API_KEY"
+api_backend = "chat_completions"
+system_prompt_label = "deepseek-chat"
+context_window = 128000

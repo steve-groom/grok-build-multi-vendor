@@ -3,8 +3,8 @@
 **Grok Build** is [xAI / SpaceXAI’s](https://github.com/xai-org/grok-build) terminal coding agent, forked here with small patches so you can:
 
 1. **Use your Grok account** (browser / `grok login`) for xAI-hosted models — the stock default experience.
-2. **Bring your own vendor** via OpenAI-compatible APIs (e.g. **Together.ai**), with per-model API keys.
-3. Load keys from a **file** (`api_key_file`) as well as env vars / inline config.
+2. **Bring your own vendor(s)** via OpenAI-compatible APIs (Together, OpenAI, OpenRouter, Groq, …).
+3. Keys from **`~/VENDOR_api_key.txt`**, `~/.grok/keys/`, env vars, or inline config.
 4. Self-identify correctly: *“You are Grok Build running the **&lt;model&gt;** model…”*
 
 Upstream source: [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0).  
@@ -16,10 +16,11 @@ This fork does **not** replace the official binary’s auto-update channel; inst
 
 ```bash
 # After unzip or: git clone <this-repo>.git && cd <this-repo>
-chmod +x install.sh
+chmod +x install.sh scripts/add-vendor.sh
 ./install.sh
-# optional: append Together model blocks to ~/.grok/config.toml
-./install.sh --with-together-config
+# optional: install one or more vendor presets into ~/.grok/config.toml
+./install.sh --with-vendor-config together openai
+# ( --with-together-config  is an alias for  --with-vendor-config together )
 ```
 
 Installs to `~/.local/bin/grok-local` (override with `--prefix` / `--name`).
@@ -48,54 +49,94 @@ unzip -q /tmp/gb.zip -d /tmp/gb && cd /tmp/gb/*
 
 | Feature | Detail |
 |---------|--------|
-| `api_key_file` | `[model.*] api_key_file = "~/secret.txt"` loads a trimmed key at config apply time |
-| Identity prompt | *Grok Build running the &lt;model&gt; model* (not silent “I am Grok 4.5” when on a vendor) |
-| Docs | Together / MiniMax / Kimi examples in the custom-models guide |
-| Installer | `install.sh` + `config.example.toml` |
+| `api_key_file` | Explicit path **or** vendor slug `@together` / `vendor:openai` |
+| Key convention | `~/VENDOR_api_key.txt` and `~/.grok/keys/VENDOR.txt` |
+| Identity prompt | *Grok Build running the &lt;model&gt; model* |
+| Presets | `vendors/*.toml` + `scripts/add-vendor.sh` |
+| Installer | `install.sh --with-vendor-config …` |
 
 Credential order for each model:
 
 1. `api_key`
-2. `api_key_file`
+2. `api_key_file` (path or `@vendor` convention)
 3. `env_key` (string or array)
 4. Grok session token (`grok login`)
 5. `XAI_API_KEY`
 
 ---
 
-## Configure Together.ai (optional)
+## Multi-vendor keys and models
 
-1. Get an API key from [Together](https://api.together.ai/).
-2. Save it (never commit this file):
+### Convention
 
-```bash
-echo 'YOUR_TOGETHER_KEY' > ~/together_api_key.txt
-chmod 600 ~/together_api_key.txt
+For any vendor slug **`V`** (e.g. `together`, `openai`, `openrouter`, `acme`):
+
+```text
+~/V_api_key.txt
+~/.grok/keys/V.txt
+~/.grok/keys/V_api_key.txt
+$GROK_KEYS_DIR/V.txt          # optional override directory
 ```
 
-3. Merge example models:
+In `~/.grok/config.toml`:
 
-```bash
-./install.sh --with-together-config
-# or manually: copy blocks from config.example.toml into ~/.grok/config.toml
+```toml
+[model.my-openai]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+name = "OpenAI GPT-4o"
+api_key_file = "@openai"              # resolves the convention paths above
+# api_key_file = "~/openai_api_key.txt"  # or an explicit path
+# env_key = "OPENAI_API_KEY"
+api_backend = "chat_completions"
+context_window = 128000
 ```
 
-4. Run:
+### Helpers
+
+```bash
+./scripts/add-vendor.sh list
+./scripts/add-vendor.sh install together openai openrouter groq
+./scripts/add-vendor.sh keys deepseek          # create empty key files only
+
+# Fully custom OpenAI-compatible endpoint:
+./scripts/add-vendor.sh add \
+  --vendor acme \
+  --id acme-coder \
+  --model acme-coder-v1 \
+  --base-url https://api.acme.example/v1 \
+  --context 131072 \
+  --name "Acme Coder"
+```
+
+Then paste secrets into the key files (`chmod 600`):
+
+```bash
+echo 'YOUR_KEY' > ~/together_api_key.txt && chmod 600 ~/together_api_key.txt
+echo 'YOUR_KEY' > ~/openai_api_key.txt   && chmod 600 ~/openai_api_key.txt
+```
+
+### Built-in presets (`vendors/`)
+
+| Preset | Notes |
+|--------|--------|
+| `together` | GLM-5.2, MiniMax-M3 (524K), Kimi-K2.7-Code |
+| `openai` | GPT-4o / mini |
+| `openrouter` | openrouter/auto |
+| `groq` | Llama 3.3 70B |
+| `fireworks` | Llama 3.3 70B |
+| `deepseek` | deepseek-chat |
+| `anthropic` | Messages API |
+| `ollama` | Local, no key |
 
 ```bash
 grok-local models
-grok-local -m together-glm -p "Say hello"
-grok-local -m together-minimax   # MiniMax-M3, 524K context
-grok-local -m together-kimi      # Kimi-K2.7-Code
+grok-local -m together-glm
+grok-local -m openai-gpt4o
+grok-local -m grok-4.5          # Grok account (no vendor key)
 ```
 
-| Config id | Together model | Context (Together serverless) |
-|-----------|----------------|--------------------------------|
-| `together-glm` | `zai-org/GLM-5.2` | 256K |
-| `together-minimax` | `MiniMaxAI/MiniMax-M3` | **524K** |
-| `together-kimi` | `moonshotai/Kimi-K2.7-Code` | 256K |
-
-Grok account models still work when selected (and when a model has no vendor key of its own).
+Grok account models work whenever a model has no own `api_key` / `api_key_file` / `env_key`.
 
 ---
 

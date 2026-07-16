@@ -1,0 +1,10 @@
+# Ollama local — https://ollama.com/  (no API key required)
+# Start: ollama serve && ollama pull llama3.1
+
+[model.ollama-llama]
+model = "llama3.1"
+base_url = "http://localhost:11434/v1"
+name = "Ollama Llama 3.1"
+api_backend = "chat_completions"
+system_prompt_label = "llama3.1 (Ollama)"
+context_window = 128000

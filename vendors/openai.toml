@@ -1,0 +1,22 @@
+# OpenAI — https://platform.openai.com/
+# Key: ~/openai_api_key.txt  or  @openai  /  env OPENAI_API_KEY
+
+[model.openai-gpt4o]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+name = "OpenAI GPT-4o"
+api_key_file = "@openai"
+env_key = "OPENAI_API_KEY"
+api_backend = "chat_completions"
+system_prompt_label = "gpt-4o (OpenAI)"
+context_window = 128000
+
+[model.openai-gpt4o-mini]
+model = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+name = "OpenAI GPT-4o mini"
+api_key_file = "@openai"
+env_key = "OPENAI_API_KEY"
+api_backend = "chat_completions"
+system_prompt_label = "gpt-4o-mini (OpenAI)"
+context_window = 128000

@@ -1,23 +1,36 @@
-# Example multi-vendor config for Grok Build (this fork).
-# Copy pieces into ~/.grok/config.toml (do not commit real API keys).
+# Multi-vendor example for Grok Build (this fork).
+# Copy pieces into ~/.grok/config.toml — never commit real API keys.
+#
+# ── Key convention ──────────────────────────────────────────────────────────
+# For any vendor slug V (together, openai, openrouter, acme, …):
+#
+#   ~/V_api_key.txt
+#   ~/.grok/keys/V.txt
+#   ~/.grok/keys/V_api_key.txt
+#   $GROK_KEYS_DIR/V.txt
+#
+# In [model.*] set either:
+#   api_key_file = "@together"                 # resolves convention paths
+#   api_key_file = "~/together_api_key.txt"    # explicit path
+#   env_key = "TOGETHER_API_KEY"               # environment variable
+#
+# Helpers:
+#   ./scripts/add-vendor.sh list
+#   ./scripts/add-vendor.sh install together openai
+#   ./scripts/add-vendor.sh add --vendor acme --model m --base-url https://api.acme/v1
+# See vendors/README.md
 
 [models]
-# Default: Together GLM-5.2 — change to "grok-4.5" (or similar) for Grok account.
+# Use a Grok account model, or a vendor id you installed:
+# default = "grok-4.5"
 default = "together-glm"
 
-# ── Together.ai vendors (OpenAI-compatible /v1) ────────────────────────────
-# Auth options (first match wins for the model):
-#   api_key = "..."
-#   api_key_file = "/path/to/key.txt"   # this fork: loads trimmed key from file
-#   env_key = "TOGETHER_API_KEY"
-
+# ── Example: Together.ai (also: vendors/together.toml) ─────────────────────
 [model.together-glm]
 model = "zai-org/GLM-5.2"
 base_url = "https://api.together.ai/v1"
 name = "Together GLM 5.2"
-description = "zai-org/GLM-5.2 via Together.ai (256K)"
-api_key_file = "~/together_api_key.txt"
-# env_key = "TOGETHER_API_KEY"
+api_key_file = "@together"
 api_backend = "chat_completions"
 system_prompt_label = "zai-org/GLM-5.2 (Together.ai)"
 context_window = 262144
@@ -26,8 +39,7 @@ context_window = 262144
 model = "MiniMaxAI/MiniMax-M3"
 base_url = "https://api.together.ai/v1"
 name = "Together MiniMax M3"
-description = "MiniMaxAI/MiniMax-M3 via Together.ai (524K)"
-api_key_file = "~/together_api_key.txt"
+api_key_file = "@together"
 api_backend = "chat_completions"
 system_prompt_label = "MiniMaxAI/MiniMax-M3 (Together.ai)"
 context_window = 524288
@@ -36,15 +48,32 @@ context_window = 524288
 model = "moonshotai/Kimi-K2.7-Code"
 base_url = "https://api.together.ai/v1"
 name = "Together Kimi K2.7 Code"
-description = "moonshotai/Kimi-K2.7-Code via Together.ai (256K)"
-api_key_file = "~/together_api_key.txt"
+api_key_file = "@together"
 api_backend = "chat_completions"
 system_prompt_label = "moonshotai/Kimi-K2.7-Code (Together.ai)"
 context_window = 262144
 
-# ── Grok account (default xAI session via `grok login`) ────────────────────
-# Leave models without api_key / api_key_file / env_key to use your signed-in
-# Grok account. Built-in catalog models (e.g. grok-4.5) work this way.
-#
-# [models]
-# default = "grok-4.5"
+# ── Example: OpenAI ────────────────────────────────────────────────────────
+# [model.openai-gpt4o]
+# model = "gpt-4o"
+# base_url = "https://api.openai.com/v1"
+# name = "OpenAI GPT-4o"
+# api_key_file = "@openai"
+# env_key = "OPENAI_API_KEY"
+# api_backend = "chat_completions"
+# context_window = 128000
+
+# ── Example: any custom OpenAI-compatible vendor ───────────────────────────
+# [model.acme-coder]
+# model = "acme-coder-v1"
+# base_url = "https://api.acme.example/v1"
+# name = "Acme Coder"
+# api_key_file = "@acme"          # → ~/acme_api_key.txt
+# # api_key_file = "~/acme_api_key.txt"
+# api_backend = "chat_completions"
+# system_prompt_label = "acme-coder-v1 (Acme)"
+# context_window = 131072
+
+# ── Grok account ───────────────────────────────────────────────────────────
+# Models without api_key / api_key_file / env_key use your signed-in session
+# (grok login). Built-in catalog models work this way.

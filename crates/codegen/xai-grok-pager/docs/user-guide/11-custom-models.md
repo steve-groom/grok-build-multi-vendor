@@ -80,8 +80,8 @@ base_url = "https://api.example.com/v1"   # OpenAI-compatible endpoint
 name = "Display Name"                     # Shown in the model picker
 description = "Model description"          # Optional description
 api_key = "sk-..."                        # API key for this provider (optional)
-api_key_file = "~/secrets/provider.key"   # Path to a file containing the API key (optional)
-env_key = "XAI_API_KEY"                   # Env var holding the API key (optional; string or array)
+api_key_file = "~/openai_api_key.txt"     # Path to key file, or vendor slug "@openai" / "vendor:openai"
+env_key = "OPENAI_API_KEY"                # Env var holding the API key (optional; string or array)
 api_backend = "chat_completions"          # "chat_completions", "responses", or "messages"
 temperature = 0.7                         # Sampling temperature
 top_p = 0.95                              # Nucleus sampling parameter
@@ -95,12 +95,20 @@ extra_headers = { "x-api-key" = "sk-..." } # Extra request headers, sent verbati
 Grok resolves the API key in this order:
 
 1. The `api_key` field in the model config
-2. The contents of `api_key_file` (path may use `~/`; whitespace is trimmed)
+2. The contents of `api_key_file`:
+   - **Path** — absolute, relative, or `~/…` (whitespace trimmed)
+   - **Vendor slug** — `@together`, `vendor:openai`, or bare `together` (no `/` or `.ext`) tries, in order:
+     - `~/VENDOR_api_key.txt`
+     - `~/.grok/keys/VENDOR.txt`
+     - `~/.grok/keys/VENDOR_api_key.txt`
+     - `$GROK_KEYS_DIR/VENDOR.txt` (and `_api_key.txt`)
 3. The environment variable(s) named by `env_key` — a single string or an array of names. The first set, non-empty value wins (for example `env_key = ["ANTHROPIC_AUTH_TOKEN", "LC_ANTHROPIC_AUTH_TOKEN"]` for SSH `LC_*` forwarding)
 4. Your signed-in session token (from `grok login`), for a model with no `api_key` / `api_key_file` / `env_key` of its own
 5. The `XAI_API_KEY` environment variable (global fallback; Grok also accepts `GROK_CODE_XAI_API_KEY` for backward compatibility)
 
 Built-in SpaceXAI models use your Grok account session by default when you are signed in. Vendor models with their own credentials use those keys without logging out of your Grok account — pick them with `/model` or `-m`.
+
+Helpers in this multi-vendor fork: `./scripts/add-vendor.sh list|install|add` and presets under `vendors/`.
 
 ### Context Window
 

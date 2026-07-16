@@ -3551,9 +3551,10 @@ pub struct ConfigModelOverride {
     pub name: Option<String>,
     pub description: Option<String>,
     pub api_key: Option<String>,
-    /// Path to a file containing the provider API key (trimmed). Supports `~/`
-    /// expansion. Used when `api_key` is unset; takes priority over `env_key`.
-    /// Example: `api_key_file = "~/secrets/together_api_key.txt"`
+    /// Path or vendor slug for the provider API key (trimmed). Supports `~/`
+    /// paths, and convention slugs `@together` / `vendor:openai` /
+    /// bare `together` → `~/together_api_key.txt` and `~/.grok/keys/…`.
+    /// Used when `api_key` is unset; takes priority over `env_key`.
     pub api_key_file: Option<String>,
     /// Env var name(s) for the provider key — string or array in config.toml.
     pub env_key: Option<EnvKeys>,
@@ -3737,18 +3738,117 @@ fn home_dir_for_api_key_file() -> Option<PathBuf> {
         })
 }
 
-/// Read and trim a provider key from disk. Empty files are errors so callers
-/// can fall through to session / global credentials cleanly.
-pub(crate) fn read_api_key_file(path: &str) -> Result<String, String> {
-    let expanded = expand_api_key_file_path(path);
-    let contents = std::fs::read_to_string(&expanded).map_err(|e| {
-        format!("cannot read {}: {e}", expanded.display())
-    })?;
+/// Strip optional `vendor:` / `@` prefix used for convention-based key lookup.
+fn strip_vendor_key_prefix(path: &str) -> &str {
+    let path = path.trim();
+    path.strip_prefix("vendor:")
+        .or_else(|| path.strip_prefix('@'))
+        .unwrap_or(path)
+        .trim()
+}
+
+/// True when `path` is a vendor **slug** (not a filesystem path), e.g. `together`,
+/// `openai`, `openrouter`. Used so `api_key_file = "@together"` (or
+/// `vendor:together`) can resolve conventional key locations:
+///
+/// - `~/together_api_key.txt`
+/// - `~/.grok/keys/together.txt`
+/// - `~/.grok/keys/together_api_key.txt`
+/// - `$GROK_KEYS_DIR/together.txt` (and `_api_key.txt`)
+///
+/// Bare paths containing `/`, `\`, `~`, `.`, or a file extension are never
+/// treated as slugs.
+fn is_vendor_key_slug(path: &str) -> bool {
+    let path = strip_vendor_key_prefix(path);
+    if path.is_empty() || path.contains('/') || path.contains('\\') {
+        return false;
+    }
+    if path.starts_with('~') || path.starts_with('.') {
+        return false;
+    }
+    // Reject filenames like `together_api_key.txt` — those are real paths.
+    if path.contains('.') {
+        return false;
+    }
+    let mut chars = path.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphabetic() {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Conventional key-file locations for a vendor slug (checked in order).
+pub(crate) fn vendor_key_file_candidates(vendor: &str) -> Vec<PathBuf> {
+    let v = strip_vendor_key_prefix(vendor).to_ascii_lowercase();
+    let mut out = Vec::new();
+    if let Some(home) = home_dir_for_api_key_file() {
+        // Primary convention: ~/together_api_key.txt
+        out.push(home.join(format!("{v}_api_key.txt")));
+        // Organized keys dir
+        let keys = home.join(".grok").join("keys");
+        out.push(keys.join(format!("{v}.txt")));
+        out.push(keys.join(format!("{v}_api_key.txt")));
+    }
+    if let Ok(dir) = std::env::var("GROK_KEYS_DIR") {
+        let d = PathBuf::from(dir.trim());
+        if !d.as_os_str().is_empty() {
+            out.push(d.join(format!("{v}.txt")));
+            out.push(d.join(format!("{v}_api_key.txt")));
+        }
+    }
+    out
+}
+
+fn read_trimmed_key_file(path: &PathBuf) -> Result<String, String> {
+    let contents = std::fs::read_to_string(path)
+        .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let key = contents.trim();
     if key.is_empty() {
-        return Err(format!("{} is empty", expanded.display()));
+        return Err(format!("{} is empty", path.display()));
     }
     Ok(key.to_owned())
+}
+
+/// Read and trim a provider key from disk. Empty files are errors so callers
+/// can fall through to session / global credentials cleanly.
+///
+/// **Path forms:**
+/// - Absolute / relative / `~/…` — read that file.
+/// - Vendor slug: `@together`, `vendor:openai`, or bare `together` (no `/` or
+///   extension) — try conventional `~/<vendor>_api_key.txt` locations.
+pub(crate) fn read_api_key_file(path: &str) -> Result<String, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("api_key_file is empty".into());
+    }
+
+    if is_vendor_key_slug(path) {
+        let vendor = strip_vendor_key_prefix(path);
+        let candidates = vendor_key_file_candidates(vendor);
+        let mut last_err = String::new();
+        for candidate in &candidates {
+            match read_trimmed_key_file(candidate) {
+                Ok(key) => return Ok(key),
+                Err(e) => last_err = e,
+            }
+        }
+        let tried = candidates
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "no API key file found for vendor `{vendor}` (last error: {last_err}); \
+             tried: {tried}. Create e.g. ~/{vendor}_api_key.txt or ~/.grok/keys/{vendor}.txt \
+             (chmod 600), or set api_key_file to an explicit path."
+        ));
+    }
+
+    let expanded = expand_api_key_file_path(path);
+    read_trimmed_key_file(&expanded)
 }
 /// Shared model metadata — the common fields across all model sources.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -5644,6 +5744,32 @@ reasoning_effort = "low"
         std::fs::write(&path, "  sk-from-file\n").expect("write key");
         let key = read_api_key_file(path.to_str().unwrap()).expect("read key");
         assert_eq!(key, "sk-from-file");
+    }
+    #[test]
+    fn is_vendor_key_slug_accepts_slugs_not_paths() {
+        assert!(is_vendor_key_slug("together"));
+        assert!(is_vendor_key_slug("@openai"));
+        assert!(is_vendor_key_slug("vendor:openrouter"));
+        assert!(is_vendor_key_slug("my-co"));
+        assert!(!is_vendor_key_slug("~/together_api_key.txt"));
+        assert!(!is_vendor_key_slug("together_api_key.txt"));
+        assert!(!is_vendor_key_slug("/secret/key"));
+        assert!(!is_vendor_key_slug(".env"));
+    }
+    #[test]
+    #[serial]
+    fn read_api_key_file_vendor_slug_uses_home_convention() {
+        use xai_grok_test_support::EnvGuard;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let home = dir.path();
+        let key_path = home.join("acme_api_key.txt");
+        std::fs::write(&key_path, "  sk-acme-vendor\n").expect("write");
+        let _home = EnvGuard::set("HOME", home.to_str().unwrap());
+        let _keys = EnvGuard::unset("GROK_KEYS_DIR");
+        let key = read_api_key_file("@acme").expect("vendor slug key");
+        assert_eq!(key, "sk-acme-vendor");
+        let key2 = read_api_key_file("vendor:acme").expect("vendor: prefix");
+        assert_eq!(key2, "sk-acme-vendor");
     }
     #[test]
     fn config_model_override_api_key_file_loads_into_entry() {

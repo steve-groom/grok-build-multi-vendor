@@ -5,28 +5,31 @@
 #   ./install.sh
 #   ./install.sh --prefix ~/.local
 #   ./install.sh --name grok-local
-#   ./install.sh --with-together-config
+#   ./install.sh --with-together-config          # alias: install together preset
+#   ./install.sh --with-vendor-config together openai
 #   ./install.sh --skip-build   # only install if target/release/xai-grok-pager exists
 #
 # After install:
 #   grok-local --version
 #   grok-local models
 #
-# Optional vendor key (Together.ai):
-#   export TOGETHER_API_KEY=...
-#   # or:  echo 'your-key' > ~/together_api_key.txt
-#   # then point api_key_file in ~/.grok/config.toml (see config.example.toml)
+# Vendor keys (any provider):
+#   echo 'sk-…' > ~/together_api_key.txt && chmod 600 ~/together_api_key.txt
+#   echo 'sk-…' > ~/openai_api_key.txt
+#   # or:  ~/.grok/keys/<vendor>.txt
+#   # or:  api_key_file = "@together" in config (see config.example.toml, vendors/)
 
 set -euo pipefail
 
 PREFIX="${PREFIX:-$HOME/.local}"
 BIN_NAME="${BIN_NAME:-grok-local}"
 WITH_TOGETHER_CONFIG=0
+VENDOR_PRESETS=()
 SKIP_BUILD=0
 JOBS="${JOBS:-}"
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \?//'
+  sed -n '2,22p' "$0" | sed 's/^# \?//'
   exit "${1:-0}"
 }
 
@@ -35,6 +38,13 @@ while [[ $# -gt 0 ]]; do
     --prefix) PREFIX="$2"; shift 2 ;;
     --name) BIN_NAME="$2"; shift 2 ;;
     --with-together-config) WITH_TOGETHER_CONFIG=1; shift ;;
+    --with-vendor-config)
+      shift
+      while [[ $# -gt 0 && "$1" != --* ]]; do
+        VENDOR_PRESETS+=("$1")
+        shift
+      done
+      ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     -j|--jobs) JOBS="$2"; shift 2 ;;
     -h|--help) usage 0 ;;
@@ -121,32 +131,17 @@ install_binary() {
   "$dest" --version 2>/dev/null || true
 }
 
-# ── optional Together config snippet ──────────────────────────────────────
-install_together_config() {
-  local cfg="${GROK_HOME:-$HOME/.grok}/config.toml"
-  local example="$ROOT/config.example.toml"
-  mkdir -p "$(dirname "$cfg")"
-  if [[ ! -f "$example" ]]; then
-    log "config.example.toml missing — skip config merge"
-    return
+# ── optional vendor presets via scripts/add-vendor.sh ─────────────────────
+install_vendor_presets() {
+  local -a presets=("$@")
+  if [[ ${#presets[@]} -eq 0 ]]; then
+    return 0
   fi
-  if [[ ! -f "$cfg" ]]; then
-    cp "$example" "$cfg"
-    log "Wrote $cfg from example"
-    return
-  fi
-  if grep -q 'api.together.ai' "$cfg" 2>/dev/null; then
-    log "Together models already present in $cfg — leave unchanged"
-    return
-  fi
-  {
-    echo ""
-    echo "# --- appended by install.sh (multi-vendor Together models) ---"
-    # strip comments-only header from example if any, append model blocks
-    sed -n '/^\[model\./,$p' "$example"
-  } >> "$cfg"
-  log "Appended Together model blocks to $cfg"
-  log "Set api_key_file paths or TOGETHER_API_KEY / env_key as needed"
+  local helper="$ROOT/scripts/add-vendor.sh"
+  [[ -x "$helper" ]] || chmod +x "$helper" 2>/dev/null || true
+  [[ -f "$helper" ]] || die "missing $helper"
+  log "Installing vendor presets: ${presets[*]}"
+  "$helper" install "${presets[@]}"
 }
 
 # ── main ──────────────────────────────────────────────────────────────────
@@ -161,11 +156,17 @@ main() {
     build_release
   fi
   install_binary
+
   if [[ "$WITH_TOGETHER_CONFIG" -eq 1 ]]; then
-    install_together_config
+    VENDOR_PRESETS+=("together")
+  fi
+  if [[ ${#VENDOR_PRESETS[@]} -gt 0 ]]; then
+    install_vendor_presets "${VENDOR_PRESETS[@]}"
   else
-    log "Tip: re-run with --with-together-config to append Together.ai models to ~/.grok/config.toml"
-    log "     or copy config.example.toml manually"
+    log "Tip: add vendors anytime:"
+    log "  ./scripts/add-vendor.sh list"
+    log "  ./scripts/add-vendor.sh install together openai openrouter"
+    log "  ./install.sh --with-vendor-config together openai"
   fi
   cat <<EOF
 
@@ -176,7 +177,10 @@ Done.
   Vendor:  $BIN_NAME -m together-glm
   Account: $BIN_NAME -m grok-4.5   # or other Grok account models
 
-Identity prompt: "You are Grok Build running the <model> model…"
+Keys:      ~/VENDOR_api_key.txt   or   ~/.grok/keys/VENDOR.txt
+           api_key_file = "@VENDOR" in config
+
+Identity:  "You are Grok Build running the <model> model…"
 
 EOF
 }

@@ -1,0 +1,12 @@
+# Groq — https://console.groq.com/
+# Key: ~/groq_api_key.txt  or  @groq
+
+[model.groq-llama]
+model = "llama-3.3-70b-versatile"
+base_url = "https://api.groq.com/openai/v1"
+name = "Groq Llama 3.3 70B"
+api_key_file = "@groq"
+env_key = "GROQ_API_KEY"
+api_backend = "chat_completions"
+system_prompt_label = "llama-3.3-70b-versatile (Groq)"
+context_window = 131072

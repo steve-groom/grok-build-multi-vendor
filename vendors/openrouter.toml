@@ -1,0 +1,13 @@
+# OpenRouter — https://openrouter.ai/
+# Key: ~/openrouter_api_key.txt  or  @openrouter
+
+[model.openrouter-auto]
+model = "openrouter/auto"
+base_url = "https://openrouter.ai/api/v1"
+name = "OpenRouter Auto"
+api_key_file = "@openrouter"
+env_key = "OPENROUTER_API_KEY"
+api_backend = "chat_completions"
+system_prompt_label = "openrouter/auto"
+context_window = 200000
+extra_headers = { "HTTP-Referer" = "https://github.com/steve-groom/grok-build-multi-vendor", "X-Title" = "Grok Build multi-vendor" }

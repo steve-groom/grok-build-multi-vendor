@@ -1,0 +1,15 @@
+# Anthropic Messages API — https://console.anthropic.com/
+# Key: ~/anthropic_api_key.txt  or  @anthropic
+# Note: uses api_backend = "messages" + x-api-key via extra_headers when needed.
+# Prefer env_key / api_key_file; the sampler maps Anthropic keys appropriately for messages.
+
+[model.anthropic-sonnet]
+model = "claude-sonnet-4-20250514"
+base_url = "https://api.anthropic.com/v1"
+name = "Claude Sonnet"
+api_key_file = "@anthropic"
+env_key = "ANTHROPIC_API_KEY"
+api_backend = "messages"
+system_prompt_label = "claude-sonnet (Anthropic)"
+context_window = 200000
+extra_headers = { "anthropic-version" = "2023-06-01" }

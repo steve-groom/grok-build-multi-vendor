@@ -8,3 +8,4 @@ together_api_key.txt
 *.pem
 .env
 .env.*
+/dist/

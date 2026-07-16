@@ -30,6 +30,7 @@ pub mod sampling_log;
 mod shared_http;
 pub mod stream;
 pub mod types;
+pub mod vendor_pricing;
 
 // Public re-exports — the API surface consumers see.
 pub use actor::SamplerActor;
@@ -52,3 +53,7 @@ pub use retry::{
 pub use sampling_log::AuthInfo;
 pub use stream::{collect_response, stream_chat_completions, stream_messages, stream_responses};
 pub use types::RequestId;
+pub use vendor_pricing::{
+    ensure_together_pricing, estimate_together_cost_ticks, is_together_base_url,
+    maybe_estimate_together_cost,
+};

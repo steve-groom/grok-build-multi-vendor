@@ -1033,6 +1033,9 @@ impl SessionActor {
     /// Resetting `estimated_tokens_since_model = 0` here also keeps the
     /// preflight-overflow guard accurate against the next turn's
     /// tool-result deltas.
+    /// Sync path used by unit tests. Prefer
+    /// [`Self::record_response_token_usage_with_estimate`] in production so
+    /// Together catalog rates can fill `cost_usd_ticks` when the wire omits cost.
     pub(crate) fn record_response_token_usage(
         &self,
         response: &ConversationResponse,
@@ -1047,6 +1050,66 @@ impl SessionActor {
                 u.clone(),
                 api_duration_ms,
                 response.cost_usd_ticks,
+            );
+            self.signals_handle()
+                .record_token_usage(u.completion_tokens, u.reasoning_tokens);
+        }
+    }
+
+    /// Like [`Self::record_response_token_usage`] but fills Together estimated
+    /// cost when the wire omits `cost_usd_ticks` (token counts × catalog rates).
+    pub(crate) async fn record_response_token_usage_with_estimate(
+        &self,
+        response: &ConversationResponse,
+        api_duration_ms: Option<u64>,
+    ) {
+        if let Some(ref u) = response.usage {
+            self.chat_state_handle
+                .record_token_usage(u64::from(u.total_tokens));
+            self.chat_state_handle.record_last_turn_usage(u.clone());
+
+            let model_id = response.assistant().and_then(|a| a.model_id.clone());
+
+            let (base_url, cfg_model) = self
+                .chat_state_handle
+                .get_sampling_config()
+                .await
+                .map(|c| (c.base_url, c.model))
+                .unwrap_or_default();
+            let api_key = self
+                .chat_state_handle
+                .get_credentials()
+                .await
+                .api_key;
+
+            let model_for_pricing = model_id
+                .clone()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(cfg_model);
+
+            if xai_grok_sampler::is_together_base_url(&base_url) {
+                // Together `/v1/models` requires auth (401 without bearer).
+                xai_grok_sampler::ensure_together_pricing(&base_url, api_key.as_deref()).await;
+            }
+
+            let cost_usd_ticks = xai_grok_sampler::maybe_estimate_together_cost(
+                &base_url,
+                &model_for_pricing,
+                Some(u),
+                response.cost_usd_ticks,
+            );
+
+            self.chat_state_handle.record_model_call_usage(
+                model_id.or_else(|| {
+                    if model_for_pricing.is_empty() {
+                        None
+                    } else {
+                        Some(model_for_pricing)
+                    }
+                }),
+                u.clone(),
+                api_duration_ms,
+                cost_usd_ticks,
             );
             self.signals_handle()
                 .record_token_usage(u.completion_tokens, u.reasoning_tokens);

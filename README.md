@@ -138,6 +138,22 @@ grok-local -m grok-4.5          # Grok account (no vendor key)
 
 Grok account models work whenever a model has no own `api_key` / `api_key_file` / `env_key`.
 
+### Estimated cost (Together.ai)
+
+For Together models, `grok-local` fetches catalog rates from `GET /v1/models` (`pricing.input` / `output` / `cached_input`, **USD per 1M tokens**) and estimates session cost as:
+
+```text
+cost ≈ uncached_input/1e6 × input + cached/1e6 × cached_input + completion/1e6 × output
+```
+
+- Shown in the **turn status line** as `~$0.00…` (running total)
+- Headless / JSON: `total_cost_usd` when the estimate is available
+- Logs: `together pricing: estimated turn cost … estimated_cost_usd=…`
+- This is an **estimate**, not Together’s invoice (wire chat usage has tokens only)
+
+Other vendors: cost is shown only if the API reports cost ticks (e.g. first-party xAI) or we add a catalog later.
+
+
 ---
 
 ## Manual build

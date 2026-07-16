@@ -121,6 +121,14 @@ impl SessionActor {
             }
         }
         let total_tokens = self.chat_state_handle.get_estimated_total_tokens().await;
+        // Session estimated USD cost (Together catalog rates when wire has no cost).
+        let estimated_cost_usd = self
+            .chat_state_handle
+            .try_get_session_usage()
+            .await
+            .ok()
+            .and_then(|ledger| ledger.totals.cost_usd_ticks)
+            .map(crate::extensions::notification::ticks_to_usd);
         let meta_info = self.chat_state_handle.get_notification_meta().await;
         let (stream_start_ms, turn_start_ms) = meta_info
             .map(|m| (m.stream_start_ms, m.turn_start_ms))
@@ -133,6 +141,15 @@ impl SessionActor {
             { "totalTokens" : total_tokens, "eventId" : event_id, "agentTimestampMs" :
             agent_timestamp_ms, }
         );
+        if let Some(usd) = estimated_cost_usd {
+            // Estimated from vendor catalog (Together) when wire omits cost.
+            meta.as_object_mut()
+                .expect("json! literal is always an Object")
+                .insert(
+                    "estimatedCostUsd".to_string(),
+                    serde_json::json!((usd * 1_000_000.0).round() / 1_000_000.0),
+                );
+        }
         let obj = meta
             .as_object_mut()
             .expect("json! literal is always an Object");

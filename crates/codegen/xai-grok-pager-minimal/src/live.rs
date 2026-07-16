@@ -517,6 +517,7 @@ fn render_minimal_status(
         None,
         false,
         agent.context_state.as_ref().map(|c| c.used),
+        agent.estimated_cost_usd,
         minimal_api::mcp_init_progress(agent),
         agent.bash_turn,
         is_pending_user_input,

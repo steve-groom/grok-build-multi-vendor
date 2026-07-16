@@ -828,6 +828,9 @@ pub struct AgentView {
     pub(crate) modal_hovered_key: Option<char>,
     /// Cached server-reported context state.
     pub context_state: Option<xai_grok_shell::session::ContextInfo>,
+    /// Running estimated session cost in USD (Together catalog × token usage).
+    /// Updated from notification `_meta.estimatedCostUsd`. `None` when unknown.
+    pub estimated_cost_usd: Option<f64>,
     /// Gateway light-frontend session (`kind: "chat"` / `--chat` / conversation
     /// resume). Suppresses Build credits / local sampler context telemetry so the
     /// status bar and prompt never imply remote usage from wrong metrics.

@@ -191,6 +191,7 @@ pub fn is_sendable_wait(activity: &Option<TurnActivity>) -> bool {
 ///   `[stop]` / `[↓]` buttons with their hover state; `None` for a keyboard-only
 ///   host (minimal mode — no mouse capture), which suppresses both buttons.
 /// - `total_tokens`: Total tokens used (context window usage), shown as `⇣Nk`.
+/// - `estimated_cost_usd`: Optional running estimate (Together catalog), shown as `~$0.01`.
 /// - `flat_background`: when `true`, right-side timer/buttons use a transparent
 ///   (`Color::Reset`) background instead of `theme.bg_base`, so the row blends
 ///   with the terminal's own background (minimal mode).
@@ -210,6 +211,7 @@ pub fn render_turn_status(
     buttons: Option<MouseButtons>,
     has_running_execute: bool,
     total_tokens: Option<u64>,
+    estimated_cost_usd: Option<f64>,
     mcp_init_progress: Option<&McpInitProgress>,
     is_bash_turn: bool,
     is_pending_user_input: bool,
@@ -307,17 +309,30 @@ pub fn render_turn_status(
     }
 
     // ── Build right-aligned content first (to know how much space is left) ──
-    // Format: `1m20s` or `1m20s ⇣12k` (with tokens).
+    // Format: `1m20s` or `1m20s ⇣12k` or `1m20s ⇣12k ~$0.01` (tokens + est. cost).
+    let cost_suffix = estimated_cost_usd
+        .filter(|c| c.is_finite() && *c > 0.0)
+        .map(format_estimated_cost_short)
+        .unwrap_or_default();
     let turn_timer_str = match (turn_elapsed, total_tokens) {
         (Some(d), Some(tokens)) if tokens > 0 => {
-            format!(
+            let base = format!(
                 "{} {}{}",
                 format_turn_timer(d),
                 crate::glyphs::token_arrow(),
                 format_tokens_short(tokens)
-            )
+            );
+            if cost_suffix.is_empty() {
+                base
+            } else {
+                format!("{base} {cost_suffix}")
+            }
+        }
+        (Some(d), _) if !cost_suffix.is_empty() => {
+            format!("{} {cost_suffix}", format_turn_timer(d))
         }
         (Some(d), _) => format_turn_timer(d),
+        _ if !cost_suffix.is_empty() => cost_suffix,
         _ => String::new(),
     };
     let turn_timer_width = turn_timer_str.width();
@@ -794,6 +809,22 @@ fn format_tokens_short(tokens: u64) -> String {
     }
 }
 
+/// Compact estimated USD for the turn-status line (Together catalog estimate).
+///
+/// - Under $0.01: `~$0.0012` (4 decimals)
+/// - Under $1:    `~$0.12`   (2 decimals)
+/// - $1+:         `~$1.23`   (2 decimals)
+fn format_estimated_cost_short(usd: f64) -> String {
+    if !usd.is_finite() || usd <= 0.0 {
+        return String::new();
+    }
+    if usd < 0.01 {
+        format!("~${usd:.4}")
+    } else {
+        format!("~${usd:.2}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -1086,6 +1117,7 @@ mod tests {
             Some(MouseButtons::default()),
             false,
             None,
+            None,
             Some(progress),
             false,
             false,
@@ -1114,6 +1146,7 @@ mod tests {
             false,
             Some(MouseButtons::default()),
             false,
+            None,
             None,
             None,
             false,
@@ -1280,6 +1313,7 @@ mod tests {
             false,
             Some(MouseButtons::default()),
             false,
+            None,
             None,
             None,
             false,

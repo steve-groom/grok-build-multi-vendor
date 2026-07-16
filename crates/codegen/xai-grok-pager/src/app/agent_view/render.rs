@@ -1828,6 +1828,7 @@ impl AgentView {
                     }),
                     has_running_execute,
                     self.context_state.as_ref().map(|c| c.used),
+                    self.estimated_cost_usd,
                     self.mcp_init_progress.as_ref(),
                     self.bash_turn,
                     is_pending_user_input,

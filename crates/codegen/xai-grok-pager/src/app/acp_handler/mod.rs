@@ -242,6 +242,13 @@ pub(crate) fn handle(msg: AcpClientMessage, app: &mut AppView) -> bool {
                         if let Some(tokens) = meta.total_tokens {
                             confirm_context_used(agent, tokens);
                         }
+                        if let Some(usd) = meta.estimated_cost_usd {
+                            // Monotonic: never drop a higher estimate on out-of-order events.
+                            let prev = agent.estimated_cost_usd.unwrap_or(0.0);
+                            if usd >= prev {
+                                agent.estimated_cost_usd = Some(usd);
+                            }
+                        }
                         if let Some(ts) = meta.turn_start_ms {
                             agent.turn_start_ms = Some(ts);
                             // A wake turn's end marker derives elapsed from its
@@ -539,6 +546,12 @@ pub(crate) fn handle(msg: AcpClientMessage, app: &mut AppView) -> bool {
                             .expect("find_session_match returned an existing subagent_views key");
                         if let Some(tokens) = meta.total_tokens {
                             confirm_context_used(child_view, tokens);
+                        }
+                        if let Some(usd) = meta.estimated_cost_usd {
+                            let prev = child_view.estimated_cost_usd.unwrap_or(0.0);
+                            if usd >= prev {
+                                child_view.estimated_cost_usd = Some(usd);
+                            }
                         }
                         if let Some(ts) = meta.turn_start_ms {
                             child_view.turn_start_ms = Some(ts);

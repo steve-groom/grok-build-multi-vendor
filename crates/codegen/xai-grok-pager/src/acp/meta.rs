@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 pub struct NotificationMeta {
     /// Accumulated token count across the session (`totalTokens`).
     pub total_tokens: Option<u64>,
+    /// Estimated session cost in USD (`estimatedCostUsd`) when the shell can
+    /// price the vendor (e.g. Together catalog rates × token usage). Absent
+    /// for xAI session billing and unknown vendors.
+    pub estimated_cost_usd: Option<f64>,
     /// UTC ms when this notification was sent (`agentTimestampMs`).
     pub agent_timestamp_ms: Option<i64>,
     /// UTC ms when the current LLM streaming response started (`streamStartMs`).
@@ -112,6 +116,10 @@ impl NotificationMeta {
             .and_then(|c| c.parse::<u64>().ok());
         Self {
             total_tokens: m.get("totalTokens").and_then(|v| v.as_u64()),
+            estimated_cost_usd: m
+                .get("estimatedCostUsd")
+                .and_then(|v| v.as_f64())
+                .filter(|c| c.is_finite() && *c > 0.0),
             agent_timestamp_ms: m.get("agentTimestampMs").and_then(|v| v.as_i64()),
             stream_start_ms: m.get("streamStartMs").and_then(|v| v.as_i64()),
             turn_start_ms: m.get("turnStartMs").and_then(|v| v.as_i64()),
